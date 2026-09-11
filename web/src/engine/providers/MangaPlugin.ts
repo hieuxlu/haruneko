@@ -5,9 +5,10 @@ import { type Priority, TaskPool } from '../taskpool/TaskPool';
 import { MediaContainer, StoreableMediaContainer, MediaItem, MediaScraper } from './MediaPlugin';
 import icon from '../../img/manga.webp';
 import { NotImplementedError } from '../Error';
-import { CreateChapterExportRegistry } from '../exporters/MangaExporterRegistry';
+import { CreateChapterExportRegistry, type MangaExportFormat } from '../exporters/MangaExporterRegistry';
 import { Observable } from '../Observable';
 import type { Tag } from '../Tags';
+import { DownloadRegistry } from '../DownloadRegistry';
 
 const settingsKeyPrefix = 'plugin.';
 
@@ -87,10 +88,12 @@ export class DecoratableMangaScraper extends MangaScraper {
 export class MangaPlugin extends MediaContainer<Manga> {
 
     private readonly _settings: ISettings;
+    public readonly DownloadRegistry: DownloadRegistry;
 
     public constructor(private readonly storageController: StorageController, private readonly settingsManager: SettingsManager, private readonly scraper: MangaScraper) {
         super(scraper.Identifier, scraper.Title);
         this._settings = this.settingsManager.OpenScope(settingsKeyPrefix + this.Identifier);
+        this.DownloadRegistry = new DownloadRegistry(this.storageController, this.settingsManager);
         this.tags.Value = this.scraper.Tags;
         this.Prepare();
     }
@@ -142,8 +145,11 @@ export class MangaPlugin extends MediaContainer<Manga> {
 
 export class Manga extends MediaContainer<Chapter> {
 
+    public readonly DownloadRegistry: DownloadRegistry;
+
     constructor(private readonly scraper: MangaScraper, parent: MangaPlugin, identifier: string, title: string, ...tags: Tag[]) {
         super(identifier, title, parent);
+        this.DownloadRegistry = parent.DownloadRegistry;
         this.tags.Value = tags;
     }
 
@@ -155,18 +161,23 @@ export class Manga extends MediaContainer<Chapter> {
         return new Chapter(this.scraper, this, identifier, title);
     }
 
-    protected PerformUpdate(): Promise<Chapter[]> {
-        return this.scraper.FetchChapters(this);
+    protected async PerformUpdate(): Promise<Chapter[]> {
+        const chapters = await this.scraper.FetchChapters(this);
+        await this.DownloadRegistry.Import(this, chapters).catch(console.warn);
+        return chapters;
     }
 }
 
 export class Chapter extends StoreableMediaContainer<Page> {
 
     private readonly isStored = new Observable<boolean, Chapter>(false);
+    private readonly downloadRegistry: DownloadRegistry;
 
     constructor(private readonly scraper: MangaScraper, parent: Manga, identifier: string, title: string, ...tags: Tag[]) {
         super(identifier, title, parent);
+        this.downloadRegistry = parent.DownloadRegistry;
         this.tags.Value = tags;
+        this.downloadRegistry.IsStored(this).then(stored => this.SetStored(stored)).catch(console.warn);
     }
 
     protected PerformUpdate(): Promise<Page[]> {
@@ -177,24 +188,34 @@ export class Chapter extends StoreableMediaContainer<Page> {
         return this.isStored;
     }
 
+    public SetStored(value: boolean): void {
+        this.isStored.Value = value;
+    }
+
     public async Store(resources: Map<number, string>): Promise<void> {
         // TODO: Inject settings manager and global scope identifier?
         const settings = HakuNeko.SettingsManager.OpenScope(Scope);
         const directory = settings.Get<Directory>(Key.MediaDirectory);
         await directory.EnsureAccess();
         let output = directory.Value;
+        const path: string[] = [];
         if(settings.Get<Check>(Key.UseWebsiteSubDirectory).Value && this.Parent?.Parent) {
             const website = SanitizeFileName(this.Parent?.Parent?.Title);
             output = await output.getDirectoryHandle(website, { create: true });
+            path.push(website);
         }
         if(this.Parent) {
             const manga = SanitizeFileName(this.Parent?.Title);
             output = await output.getDirectoryHandle(manga, { create: true });
+            path.push(manga);
         }
 
         // TODO: Find more appropriate way to inject the storage dependency
         const registry = CreateChapterExportRegistry(this.Parent?.Parent['storageController']);
-        await registry[settings.Get<Choice>(Key.MangaExportFormat).Value].Export(resources, output, this.Title, this.Parent?.Title);
+        const format = settings.Get<Choice>(Key.MangaExportFormat).Value as MangaExportFormat;
+        await registry[format].Export(resources, output, this.Title, this.Parent?.Title);
+        path.push(this.downloadRegistry.GetOutputName(this.Title, format));
+        await this.downloadRegistry.MarkStored(this, format, path.join('/'));
     }
 }
 

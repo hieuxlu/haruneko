@@ -87,6 +87,17 @@
 
     let downloadTask: DownloadTask = $state();
     let downloadTaskStatus: Status=$state();
+    let stored = $state(false);
+
+    function refreshStoredStatus(value: boolean) {
+        stored = value;
+    }
+    $effect(() => {
+        const storedState = (item as StoreableMediaContainer<MediaItem>).IsStored;
+        stored = storedState?.Value ?? false;
+        storedState?.Subscribe(refreshStoredStatus);
+        return () => storedState?.Unsubscribe(refreshStoredStatus);
+    });
 
     async function taskQueueChanged(tasks: DownloadTask[]) {
         downloadTask?.Status.Unsubscribe(refreshDownloadStatus);
@@ -129,7 +140,18 @@
     {onmouseenter}
     {oncontextmenu}
 >
-    {#if !downloadTaskStatus}
+    {#if !downloadTaskStatus && stored}
+        <Button
+            size="small"
+            kind="ghost"
+            tooltipPosition="right"
+            tooltipAlignment="end"
+            iconDescription="Download complete"
+            onclick={() => alert('Download complete. TODO: open folder using system explorer')}
+        >
+            <FolderOpen fill="var(--cds-support-03)" />
+        </Button>
+    {:else if !downloadTaskStatus}
         <Button
             role="download"
             size="small"
