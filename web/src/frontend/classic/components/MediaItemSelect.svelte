@@ -102,6 +102,7 @@
         });
     });
     let showItems = $derived(reverseSortOrder ? filteredItems.toReversed() : filteredItems);
+    let selectedDownloadItems = $derived(showItems.filter(item => selectedItems.includes(item)));
 
     let itemsdiv: HTMLElement = $state();
 
@@ -313,13 +314,13 @@
             <ContextMenuOption
                 labelText="Download {selectedItems.length} selecteds"
                 shortcutText="⌘S"
-                onclick={() => downloadItems(selectedItems.toReversed())}
+                onclick={() => downloadItems(selectedDownloadItems)}
             />
         {/if}
         <ContextMenuOption
             labelText="Download all"
             shortcutText="⌘A"
-            onclick={() => downloadItems(filteredItems.toReversed())}
+            onclick={() => downloadItems(showItems)}
         />
         {#if contextItem}
             <ContextMenuDivider />
@@ -445,21 +446,21 @@
             {#if selectedItems.length > 0}
                 <MenuButton labelText="Download" size="sm" intrinsicAlign="end">
                     {#if selectedItems.length === 1}
-                        <MenuItem on:click={() => downloadItems(selectedItems)}>Selected (1)</MenuItem>
+                        <MenuItem on:click={() => downloadItems(selectedDownloadItems)}>Selected (1)</MenuItem>
                     {:else }
-                        <MenuItem on:click={() => downloadItems(selectedItems.toReversed())}>Selecteds ({selectedItems.length})</MenuItem>
+                        <MenuItem on:click={() => downloadItems(selectedDownloadItems)}>Selecteds ({selectedItems.length})</MenuItem>
                     {/if}
                     <MenuItem
-                        on:click={() => downloadUnviewedItems(filteredItems.toReversed())}
+                        on:click={() => downloadUnviewedItems(showItems)}
                     >All unviewed</MenuItem>
-                    <MenuItem on:click={() => downloadItems(filteredItems.toReversed())}>All</MenuItem>
+                    <MenuItem on:click={() => downloadItems(showItems)}>All</MenuItem>
                 </MenuButton>
             {:else}
                 <Button
                     size="small"
                     icon={CloudDownload}
                     iconDescription="Download all"
-                    onclick={() => downloadUnviewedItems(filteredItems.toReversed())}
+                    onclick={() => downloadUnviewedItems(showItems)}
                 >
                     Download all unviewed
                 </Button>
