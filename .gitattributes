@@ -1,0 +1,4 @@
+/.agents/skills/cbz-volumes/** text eol=lf
+/build-cbz.ps1 text eol=lf
+/scripts/cbz/** text eol=lf
+/test/cbz/** text eol=lf

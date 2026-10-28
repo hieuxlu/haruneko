@@ -34,6 +34,9 @@ image:https://badges.crowdin.net/hakuneko/localized.svg[link=https://crowdin.com
 
 ## Documentation
 
+Local chapter-to-volume packaging: link:scripts/cbz/README.md[CBZ packaging tools and settings].
+The repository also includes a link:.agents/skills/cbz-volumes/SKILL.md[CBZ packaging and metadata skill].
+
 image:https://img.shields.io/badge/-read-blue?logo=html5&label=User%20Manual[link=https://docs.hakuneko.download/user-manual/, title="User Manual (online)", window="_blank"]
 image:https://img.shields.io/badge/-edit-red?logo=github&label=User%20Manual[link=https://github.com/manga-download/haruneko/tree/master/docs/user-manual, title="User Manual (source)", window="_blank"]
 image:https://img.shields.io/badge/-read-blue?logo=html5&label=Development%20Guide[link=https://docs.hakuneko.download/development-guide/, title="User Manual (online)", window="_blank"]

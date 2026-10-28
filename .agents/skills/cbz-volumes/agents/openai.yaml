@@ -1,0 +1,3 @@
+interface:
+  display_name: "CBZ Volumes"
+  short_description: "Package volumes and find metadata and covers"
