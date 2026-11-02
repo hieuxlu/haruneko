@@ -9,18 +9,28 @@
     let taskerror: DownloadTask = $state();
     let downloadTasks: DownloadTask[] = $state(HakuNeko.DownloadManager.Queue.Value);
 
-    HakuNeko.DownloadManager.Queue.Subscribe((tasks) => {
-        downloadTasks = tasks;
+    $effect(() => {
+        const queue = HakuNeko.DownloadManager.Queue;
+        let observedTasks: DownloadTask[] = [];
+        const refreshStatus = () => { downloadTasks = [...queue.Value]; };
+        const refreshQueue = (tasks: DownloadTask[]) => {
+            observedTasks.forEach(task => task.Status.Unsubscribe(refreshStatus));
+            observedTasks = [...tasks];
+            observedTasks.forEach(task => task.Status.Subscribe(refreshStatus));
+            downloadTasks = [...tasks];
+        };
+        refreshQueue(queue.Value);
+        queue.Subscribe(refreshQueue);
+        return () => {
+            queue.Unsubscribe(refreshQueue);
+            observedTasks.forEach(task => task.Status.Unsubscribe(refreshStatus));
+        };
     });
 
     let groupedJobs = $derived(Object.groupBy(
         downloadTasks,
         (elt) => elt.Media.Parent.Identifier,
     ));
-
-    function onUpdate() {
-        downloadTasks = downloadTasks;
-    }
 
     function copyErrorToClipBoard(task: DownloadTask) {
         let message = `${task.Media.Title}\r\n`;
@@ -101,7 +111,6 @@
                                 <DownloadManagerTask
                                     {job}
                                     bind:taskerror
-                                    {onUpdate}
                                 ></DownloadManagerTask>
                             {/each}
                         </div>

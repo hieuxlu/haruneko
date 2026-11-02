@@ -53,31 +53,37 @@
         }
     }
 
-    HakuNeko.DownloadManager.Queue.Subscribe((tasks) => {
+    function refreshQueue(tasks: DownloadTask[]) {
         const removed = previousTasks.filter((task) => !tasks.includes(task));
         const added = tasks.filter((task) => !previousTasks.includes(task));
         removed.forEach((job) => job.Status.Unsubscribe(refreshStatus));
         added.forEach((job) => job.Status.Subscribe(refreshStatus));
         previousTasks = [...tasks];
         downloadTasks = tasks;
-        refreshCounts();
-    });
+        refreshStatus();
+    }
+    refreshQueue(HakuNeko.DownloadManager.Queue.Value);
+    HakuNeko.DownloadManager.Queue.Subscribe(refreshQueue);
 
     async function refreshStatus() {
+        downloadTasks = [...downloadTasks];
         const nowDownloading = downloadTasks.filter((job) =>
             [Status.Downloading, Status.Processing].includes(job.Status.Value),
         )[0];
-        if (nowDownloading && nowDownloading !== currentDownload) {
+        const nextDownload = nowDownloading ?? (downloadTasks.includes(currentDownload) ? currentDownload : undefined);
+        if (nextDownload !== currentDownload) {
             currentDownload?.Status.Unsubscribe(refreshProgress);
             currentDownload?.Progress.Unsubscribe(refreshProgress);
-            currentDownload = nowDownloading;
-            currentDownload.Progress.Subscribe(refreshProgress);
-            currentDownload.Status.Subscribe(refreshProgress);
+            currentDownload = nextDownload;
+            currentDownload?.Progress.Subscribe(refreshProgress);
+            currentDownload?.Status.Subscribe(refreshProgress);
         }
+        if (currentDownload) refreshProgress();
         refreshCounts();
     }
 
     onDestroy(() => {
+        HakuNeko.DownloadManager.Queue.Unsubscribe(refreshQueue);
         currentDownload?.Progress.Unsubscribe(refreshProgress);
         currentDownload?.Status.Unsubscribe(refreshProgress);
         downloadTasks.forEach((job) => job.Status.Unsubscribe(refreshStatus));
