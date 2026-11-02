@@ -48,6 +48,10 @@ function Media() {
         Title: 'Chapter 68',
         Parent: manga,
         IsStored: { Value: false },
+        IsManuallyDownloaded: { Value: false },
+        SetManuallyDownloaded: vi.fn(function (this: typeof chapter, value: boolean) {
+            this.IsManuallyDownloaded.Value = value;
+        }),
         SetStored: vi.fn(function (this: typeof chapter, value: boolean) {
             this.IsStored.Value = value;
         }),
@@ -59,6 +63,7 @@ function Fixture(root: MockHandle, records: DownloadRecord[] = []) {
     const storage = {
         LoadPersistent: vi.fn().mockResolvedValue(records),
         SavePersistent: vi.fn().mockResolvedValue(undefined),
+        RemovePersistent: vi.fn().mockResolvedValue(undefined),
     } as unknown as StorageController;
     const settings = {
         OpenScope: vi.fn(() => ({
@@ -69,6 +74,94 @@ function Fixture(root: MockHandle, records: DownloadRecord[] = []) {
 }
 
 describe('DownloadRegistry', () => {
+
+    it('Should persist a manual download without a directory or local output', async () => {
+        const { chapter } = Media();
+        const fixture = Fixture(undefined);
+
+        await fixture.registry.SetDownloaded(chapter, true);
+
+        const record = await fixture.registry.GetRecord(chapter);
+        expect(record.source).toBe('manual');
+        expect(record.relativePath).toBeUndefined();
+        expect(record.format).toBeUndefined();
+        expect(chapter.IsManuallyDownloaded.Value).toBe(true);
+        await expect(fixture.registry.IsStored(chapter)).resolves.toBe(false);
+        expect(fixture.settings.OpenScope).not.toHaveBeenCalled();
+
+        const reloaded = Fixture(undefined, [record]);
+        await expect(reloaded.registry.GetRecord(Media().chapter)).resolves.toEqual(record);
+    });
+
+    it('Should clear a manual download so it becomes missing again', async () => {
+        const { chapter } = Media();
+        const fixture = Fixture(undefined);
+        await fixture.registry.SetDownloaded(chapter, true);
+
+        await fixture.registry.SetDownloaded(chapter, false);
+
+        expect(fixture.storage.RemovePersistent).toHaveBeenCalledWith(Store.Downloads, DownloadRegistry.GetKey(chapter));
+        expect(chapter.IsManuallyDownloaded.Value).toBe(false);
+        await expect(fixture.registry.GetRecord(chapter)).resolves.toBeUndefined();
+    });
+
+    it('Should retain other selected chapters when clearing one manual mark', async () => {
+        const first = Media().chapter;
+        const second = Media().chapter;
+        Object.defineProperty(second, 'Identifier', { value: '/chapter/69' });
+        const fixture = Fixture(undefined);
+
+        for (const chapter of [first, second]) {
+            await fixture.registry.SetDownloaded(chapter, true);
+        }
+        await fixture.registry.SetDownloaded(first, false);
+
+        await expect(fixture.registry.GetRecord(first)).resolves.toBeUndefined();
+        expect((await fixture.registry.GetRecord(second)).source).toBe('manual');
+        expect(second.IsManuallyDownloaded.Value).toBe(true);
+    });
+
+    it('Should preserve manual status when saving or clearing it fails', async () => {
+        const { chapter } = Media();
+        const fixture = Fixture(undefined);
+        vi.mocked(fixture.storage.SavePersistent).mockRejectedValueOnce(new Error('Save failed'));
+        await expect(fixture.registry.SetDownloaded(chapter, true)).rejects.toThrow('Save failed');
+        expect(chapter.IsManuallyDownloaded.Value).toBe(false);
+        await expect(fixture.registry.GetRecord(chapter)).resolves.toBeUndefined();
+
+        await fixture.registry.SetDownloaded(chapter, true);
+        vi.mocked(fixture.storage.RemovePersistent).mockRejectedValueOnce(new Error('Remove failed'));
+        await expect(fixture.registry.SetDownloaded(chapter, false)).rejects.toThrow('Remove failed');
+        expect(chapter.IsManuallyDownloaded.Value).toBe(true);
+        expect((await fixture.registry.GetRecord(chapter)).source).toBe('manual');
+    });
+
+    it('Should preserve local output details when manually marking a stored chapter', async () => {
+        const { chapter } = Media();
+        const fixture = Fixture(undefined);
+        await fixture.registry.MarkStored(chapter, MangaExportFormat.CBZ, 'Frieren/Chapter 68.cbz');
+
+        await fixture.registry.SetDownloaded(chapter, true);
+
+        expect((await fixture.registry.GetRecord(chapter)).source).toBe('download');
+        expect(chapter.IsStored.Value).toBe(true);
+        expect(chapter.IsManuallyDownloaded.Value).toBe(false);
+        expect(fixture.storage.SavePersistent).toHaveBeenCalledTimes(1);
+    });
+
+    it('Should replace a manual mark when a local chapter is discovered', async () => {
+        const { manga, chapter } = Media();
+        const fixture = Fixture(Directory('Media', [
+            Directory('Frieren꞉ Beyond Journey’s End', [File('Chapter 68.cbz')]),
+        ]));
+        await fixture.registry.SetDownloaded(chapter, true);
+
+        await fixture.registry.Import(manga, [chapter]);
+
+        expect((await fixture.registry.GetRecord(chapter)).source).toBe('scan');
+        expect(chapter.IsManuallyDownloaded.Value).toBe(false);
+        expect(chapter.IsStored.Value).toBe(true);
+    });
 
     it('Should persist a stable chapter record after a successful download', async () => {
         const { chapter } = Media();

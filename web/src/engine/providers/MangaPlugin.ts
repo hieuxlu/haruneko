@@ -171,6 +171,7 @@ export class Manga extends MediaContainer<Chapter> {
 export class Chapter extends StoreableMediaContainer<Page> {
 
     private readonly isStored = new Observable<boolean, Chapter>(false);
+    private readonly isManuallyDownloaded = new Observable<boolean, Chapter>(false);
     private readonly downloadRegistry: DownloadRegistry;
 
     constructor(private readonly scraper: MangaScraper, parent: Manga, identifier: string, title: string, ...tags: Tag[]) {
@@ -192,8 +193,22 @@ export class Chapter extends StoreableMediaContainer<Page> {
         this.isStored.Value = value;
     }
 
+    public get IsManuallyDownloaded() {
+        return this.isManuallyDownloaded;
+    }
+
+    public SetManuallyDownloaded(value: boolean): void {
+        this.isManuallyDownloaded.Value = value;
+    }
+
+    public async SetDownloaded(downloaded: boolean): Promise<void> {
+        await this.downloadRegistry.SetDownloaded(this, downloaded);
+    }
+
     public async RefreshStored(): Promise<boolean> {
-        const stored = await this.downloadRegistry.IsStored(this);
+        const record = await this.downloadRegistry.GetRecord(this);
+        const stored = record !== undefined && record.source !== 'manual';
+        this.SetManuallyDownloaded(record?.source === 'manual');
         this.SetStored(stored);
         return stored;
     }

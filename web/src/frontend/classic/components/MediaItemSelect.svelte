@@ -160,6 +160,17 @@
             }
         }
     }
+
+    async function setContextDownloaded(downloaded: boolean) {
+        const items = [...contextFlagItems] as StoreableMediaContainer<MediaItem>[];
+        try {
+            for (const item of items) {
+                await item.SetDownloaded(downloaded);
+            }
+        } catch (error) {
+            alert(error?.message ?? error);
+        }
+    }
     
     /** Clears the item associated with the context menu. */
     function onContextMenuClose() {
@@ -313,7 +324,7 @@
     async function downloadMissingItems(items: MediaContainer<MediaItem>[]) {
         const storeableItems = items as StoreableMediaContainer<MediaItem>[];
         const stored = await Promise.all(storeableItems.map(item => item.RefreshStored()));
-        return downloadItems(storeableItems.filter((_item, index) => !stored[index]));
+        return downloadItems(storeableItems.filter((item, index) => !stored[index] && !item.IsManuallyDownloaded.Value));
     }
 
     /** Toggles the order in which the filtered items are displayed. */
@@ -357,6 +368,14 @@
                 }}
             />
             <ContextMenuOption labelText="Flag as">
+                <ContextMenuOption
+                    labelText={contextFlagItems.length > 1 ? `Downloaded (${contextFlagItems.length} selected)` : 'Downloaded'}
+                    on:click={() => setContextDownloaded(true)}
+                />
+                <ContextMenuOption
+                    labelText={contextFlagItems.length > 1 ? `Not downloaded (${contextFlagItems.length} selected)` : 'Not downloaded'}
+                    on:click={() => setContextDownloaded(false)}
+                />
                 <ContextMenuOption
                     labelText={contextFlagItems.length > 1 ? `Not viewed (${contextFlagItems.length} selected)` : 'Not viewed'}
                     on:click={() => flagContextItems()}

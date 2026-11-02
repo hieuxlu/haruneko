@@ -4,7 +4,7 @@ import type { Directory, SettingsManager } from './SettingsManager';
 import { SanitizeFileName, Store, type StorageController } from './StorageController';
 import type { Chapter, Manga } from './providers/MangaPlugin';
 
-export type DownloadSource = 'download' | 'scan';
+export type DownloadSource = 'download' | 'scan' | 'manual';
 
 export type DownloadRecord = {
     key: string;
@@ -14,8 +14,8 @@ export type DownloadRecord = {
     websiteTitle: string;
     mangaTitle: string;
     chapterTitle: string;
-    format: MangaExportFormat;
-    relativePath: string;
+    format?: MangaExportFormat;
+    relativePath?: string;
     source: DownloadSource;
     updated: number;
 };
@@ -32,7 +32,7 @@ const formats = [
     { format: MangaExportFormat.RAWs, extension: '', kind: 'directory' },
 ] as const;
 
-/** Persisted record of successfully exported chapters, with best-effort filesystem import. */
+/** Persisted download status, including manual marks and best-effort filesystem import. */
 export class DownloadRegistry {
 
     private records: Map<string, DownloadRecord>;
@@ -59,7 +59,28 @@ export class DownloadRegistry {
     }
 
     public async IsStored(chapter: Chapter): Promise<boolean> {
-        return (await this.GetRecords()).has(DownloadRegistry.GetKey(chapter));
+        const record = await this.GetRecord(chapter);
+        return record !== undefined && record.source !== 'manual';
+    }
+
+    public async GetRecord(chapter: Chapter): Promise<DownloadRecord | undefined> {
+        return (await this.GetRecords()).get(DownloadRegistry.GetKey(chapter));
+    }
+
+    /** Changes tracking only; never creates or deletes chapter files. */
+    public async SetDownloaded(chapter: Chapter, downloaded: boolean): Promise<void> {
+        if (downloaded) {
+            // Keep the local output details when the chapter is already stored.
+            if (await this.IsStored(chapter)) return;
+            await this.MarkStored(chapter, undefined, undefined, 'manual');
+        } else {
+            const records = await this.GetRecords();
+            const key = DownloadRegistry.GetKey(chapter);
+            await this.storage.RemovePersistent(Store.Downloads, key);
+            records.delete(key);
+            chapter.SetManuallyDownloaded(false);
+            chapter.SetStored(false);
+        }
     }
 
     public async MarkStored(chapter: Chapter, format: MangaExportFormat, relativePath: string, source: DownloadSource = 'download'): Promise<void> {
@@ -79,7 +100,8 @@ export class DownloadRegistry {
         const records = await this.GetRecords();
         await this.storage.SavePersistent(record, Store.Downloads, record.key);
         records.set(record.key, record);
-        chapter.SetStored(true);
+        chapter.SetManuallyDownloaded(source === 'manual');
+        chapter.SetStored(source !== 'manual');
     }
 
     public GetOutputName(chapterTitle: string, format: MangaExportFormat): string {

@@ -103,6 +103,8 @@ export abstract class MediaContainer<T extends MediaChild> {
 export abstract class StoreableMediaContainer<T extends MediaItem> extends MediaContainer<T> {
 
     public abstract get IsStored(): IObservable<boolean, MediaContainer<T>>;
+    public abstract get IsManuallyDownloaded(): IObservable<boolean, MediaContainer<T>>;
+    public abstract SetDownloaded(downloaded: boolean): Promise<void>;
     public abstract RefreshStored(): Promise<boolean>;
     public abstract Store(resources: Map<number, string>, markStored?: boolean): Promise<void>;
 }

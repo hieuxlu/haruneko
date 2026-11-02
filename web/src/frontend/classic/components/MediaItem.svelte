@@ -18,6 +18,7 @@
     import { Button, ClickableTile } from 'carbon-components-svelte';
     import BookmarkFilled from 'carbon-icons-svelte/lib/BookmarkFilled.svelte';
     import CloudDownload from 'carbon-icons-svelte/lib/CloudDownload.svelte';
+    import Checkmark from 'carbon-icons-svelte/lib/Checkmark.svelte';
     import Download from 'carbon-icons-svelte/lib/Download.svelte';
     import EventIncident from 'carbon-icons-svelte/lib/EventIncident.svelte';
     import FolderOpen from 'carbon-icons-svelte/lib/FolderOpen.svelte';
@@ -88,6 +89,18 @@
     let downloadTask: DownloadTask = $state();
     let downloadTaskStatus: Status=$state();
     let stored = $state(false);
+    let manuallyDownloaded = $state(false);
+
+    function refreshManualDownloadStatus(value: boolean) {
+        manuallyDownloaded = value;
+    }
+
+    $effect(() => {
+        const manualState = (item as StoreableMediaContainer<MediaItem>).IsManuallyDownloaded;
+        manuallyDownloaded = manualState?.Value ?? false;
+        manualState?.Subscribe(refreshManualDownloadStatus);
+        return () => manualState?.Unsubscribe(refreshManualDownloadStatus);
+    });
 
     function refreshStoredStatus(value: boolean) {
         stored = value;
@@ -140,7 +153,18 @@
     {onmouseenter}
     {oncontextmenu}
 >
-    {#if !downloadTaskStatus && stored}
+    {#if manuallyDownloaded && (!downloadTaskStatus || downloadTaskStatus === Status.Completed)}
+        <Button
+            size="small"
+            kind="ghost"
+            tooltipPosition="right"
+            tooltipAlignment="end"
+            iconDescription="Marked as downloaded (may be on another PC). Click to download here."
+            onclick={() => addDownload(item as StoreableMediaContainer<MediaItem>)}
+        >
+            <Checkmark fill="var(--cds-support-03)" />
+        </Button>
+    {:else if !downloadTaskStatus && stored}
         <Button
             size="small"
             kind="ghost"
