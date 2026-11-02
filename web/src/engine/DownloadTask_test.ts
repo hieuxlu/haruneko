@@ -81,7 +81,7 @@ describe('DownloadTask', () => {
             expect(fixture.StorageControllerMock.RemoveTemporary).toHaveBeenCalledTimes(1);
         });
 
-        it('Should gracefully succeed on downloading errors', async () => {
+        it('Should store successful resources without marking the chapter stored on downloading errors', async () => {
             const items = [ MockItem(true), MockItem(false), MockItem(true), MockItem(false) ];
             const fixture = new TestFixture().SetupMediaContainer(items);
             const testee = fixture.CreateTestee();
@@ -92,7 +92,10 @@ describe('DownloadTask', () => {
                 expect(item.Fetch).toHaveBeenCalledTimes(1);
             }
             expect(fixture.MediaContainerMock.Update).toHaveBeenCalledTimes(1);
-            expect(fixture.MediaContainerMock.Store).toHaveBeenCalledTimes(0);
+            expect(fixture.MediaContainerMock.Store).toHaveBeenCalledTimes(1);
+            const [ resources, markStored ] = fixture.MediaContainerMock.Store.mock.calls[0];
+            expect([ ...resources.keys() ]).toEqual([ 0, 2 ]);
+            expect(markStored).toBe(false);
             expect(fixture.StorageControllerMock.SaveTemporary).toHaveBeenCalledTimes(2);
             expect(fixture.StorageControllerMock.RemoveTemporary).toHaveBeenCalledTimes(1);
         });
@@ -389,9 +392,11 @@ describe('DownloadTask', () => {
 
             await testee.Run();
 
-            expect(fixture.ProgressChangedCallbackMock).toHaveBeenCalledTimes(2);
+            expect(fixture.ProgressChangedCallbackMock).toHaveBeenCalledTimes(4);
             expect(fixture.ProgressChangedCallbackMock).toHaveBeenNthCalledWith(1, 1/items.length, testee);
             expect(fixture.ProgressChangedCallbackMock).toHaveBeenNthCalledWith(2, 2/items.length, testee);
+            expect(fixture.ProgressChangedCallbackMock).toHaveBeenNthCalledWith(3, -2/items.length, testee);
+            expect(fixture.ProgressChangedCallbackMock).toHaveBeenNthCalledWith(4, 2/items.length, testee);
         });
 
         it('Should invoke expected events on processing error', async () => {

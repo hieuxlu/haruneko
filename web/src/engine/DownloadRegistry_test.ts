@@ -89,6 +89,18 @@ describe('DownloadRegistry', () => {
         expect(chapter.SetStored).toHaveBeenCalledWith(true);
     });
 
+    it('Should not mark a chapter as stored when persisting the record fails', async () => {
+        const { chapter } = Media();
+        const fixture = Fixture(Directory('Media'));
+        vi.mocked(fixture.storage.SavePersistent).mockRejectedValueOnce(new Error('Storage failed'));
+
+        await expect(fixture.registry.MarkStored(chapter, MangaExportFormat.CBZ, 'Frieren/Chapter 68.cbz'))
+            .rejects.toThrow('Storage failed');
+
+        expect(chapter.SetStored).not.toHaveBeenCalled();
+        await expect(fixture.registry.IsStored(chapter)).resolves.toBe(false);
+    });
+
     it('Should import an existing CBZ from the media directory', async () => {
         const { manga, chapter } = Media();
         const mangaDirectory = Directory('Frieren꞉ Beyond Journey’s End', [ File('Chapter 68.cbz') ]);

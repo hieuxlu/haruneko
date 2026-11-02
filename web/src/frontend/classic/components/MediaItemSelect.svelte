@@ -14,8 +14,6 @@
     } from 'carbon-components-svelte';
     import ChevronSort from 'carbon-icons-svelte/lib/ChevronSort.svelte';
     import EarthFilled from 'carbon-icons-svelte/lib/EarthFilled.svelte';
-    import CloudDownload from 'carbon-icons-svelte/lib/CloudDownload.svelte';
-
     import { fade } from 'svelte/transition';
 
     import MediaComponent from './MediaItem.svelte';
@@ -147,6 +145,21 @@
     let multipleSelectionDragTo: number = -1;
     let selectedDragItems: MediaContainer<MediaItem>[] = [];
     let contextItem: MediaContainer<MediaItem> = $state();
+    let contextFlagItems = $derived(contextItem
+        ? (selectedItems.includes(contextItem) ? selectedDownloadItems : [contextItem])
+        : []);
+
+    /** Updates flags sequentially so each change preserves the preceding changes. */
+    async function flagContextItems(kind?: FlagType) {
+        const items = [...contextFlagItems];
+        for (const item of items) {
+            if (kind === undefined) {
+                await window.HakuNeko.ItemflagManager.UnflagItem(item);
+            } else {
+                await window.HakuNeko.ItemflagManager.FlagItem(item, kind);
+            }
+        }
+    }
     
     /** Clears the item associated with the context menu. */
     function onContextMenuClose() {
@@ -269,6 +282,7 @@
      * @param items - The media items to enqueue.
      */
     async function downloadItems(items: MediaContainer<MediaItem>[]) {
+        if (items.length === 0) return;
         try {
             await HakuNeko.SettingsManager.OpenScope().Get<Directory>(GlobalKey.MediaDirectory).EnsureAccess();
         } catch(error) {
@@ -276,7 +290,7 @@
             alert(error?.message ?? error);
             return;
         }
-        items.forEach(item => window.HakuNeko.DownloadManager.Enqueue(item as StoreableMediaContainer<MediaItem>));
+        await window.HakuNeko.DownloadManager.Enqueue(...items as StoreableMediaContainer<MediaItem>[]);
     }
     /**
      * Enqueues all items that have not been viewed or are not currently being viewed.
@@ -295,6 +309,13 @@
         return downloadItems(unvieweditems);
     }
 
+    /** Enqueues only items that have not been successfully stored yet. */
+    async function downloadMissingItems(items: MediaContainer<MediaItem>[]) {
+        const storeableItems = items as StoreableMediaContainer<MediaItem>[];
+        const stored = await Promise.all(storeableItems.map(item => item.RefreshStored()));
+        return downloadItems(storeableItems.filter((_item, index) => !stored[index]));
+    }
+
     /** Toggles the order in which the filtered items are displayed. */
     function reverseSort() {
         reverseSortOrder = !reverseSortOrder;
@@ -302,55 +323,52 @@
 </script>
 
 {#if filteredItems.length > 0}
-    <ContextMenu target={[itemsdiv]} onclose={onContextMenuClose}>
+    <ContextMenu target={[itemsdiv]} on:close={onContextMenuClose}>
         {#if contextItem}
             <ContextMenuOption
                 labelText="Download - {contextItem?.Title}"
                 shortcutText="⌘D"
-                onclick={() => downloadItems([contextItem])}
+                on:click={() => downloadItems([contextItem])}
             />
         {/if}
         {#if selectedItems.length > 1}
             <ContextMenuOption
                 labelText="Download {selectedItems.length} selecteds"
                 shortcutText="⌘S"
-                onclick={() => downloadItems(selectedDownloadItems)}
+                on:click={() => downloadItems(selectedDownloadItems)}
             />
         {/if}
         <ContextMenuOption
             labelText="Download all"
             shortcutText="⌘A"
-            onclick={() => downloadItems(showItems)}
+            on:click={() => downloadItems(showItems)}
+        />
+        <ContextMenuOption
+            labelText="Download missing chapters"
+            on:click={() => downloadMissingItems(showItems)}
         />
         {#if contextItem}
             <ContextMenuDivider />
             <ContextMenuOption
                 labelText="View"
                 shortcutText="⌘V"
-                onclick={() => {
+                on:click={() => {
                     UI.selectedItem = contextItem;
                 }}
             />
             <ContextMenuOption labelText="Flag as">
                 <ContextMenuOption
-                    labelText="Not viewed"
-                    onclick={async () => {
-                        window.HakuNeko.ItemflagManager.UnflagItem(contextItem);
-                    }}
+                    labelText={contextFlagItems.length > 1 ? `Not viewed (${contextFlagItems.length} selected)` : 'Not viewed'}
+                    on:click={() => flagContextItems()}
                 />
                 <ContextMenuOption
-                    labelText="Viewed"
-                    onclick={async () => {
-                        window.HakuNeko.ItemflagManager.FlagItem(
-                            contextItem,
-                            FlagType.Viewed,
-                        );
-                    }}
+                    labelText={contextFlagItems.length > 1 ? `Viewed (${contextFlagItems.length} selected)` : 'Viewed'}
+                    on:click={() => flagContextItems(FlagType.Viewed)}
                 />
                 <ContextMenuOption
                     labelText="Current"
-                    onclick={async () => {
-                        window.HakuNeko.ItemflagManager.FlagItem(
+                    on:click={async () => {
+                        await window.HakuNeko.ItemflagManager.FlagItem(
                             contextItem,
                             FlagType.Current,
                         );
@@ -453,17 +471,21 @@
                     <MenuItem
                         on:click={() => downloadUnviewedItems(showItems)}
                     >All unviewed</MenuItem>
+                    <MenuItem
+                        on:click={() => downloadMissingItems(showItems)}
+                    >Missing chapters</MenuItem>
                     <MenuItem on:click={() => downloadItems(showItems)}>All</MenuItem>
                 </MenuButton>
             {:else}
-                <Button
-                    size="small"
-                    icon={CloudDownload}
-                    iconDescription="Download all"
-                    onclick={() => downloadUnviewedItems(showItems)}
-                >
-                    Download all unviewed
-                </Button>
+                <MenuButton labelText="Download" size="sm" intrinsicAlign="end">
+                    <MenuItem
+                        on:click={() => downloadMissingItems(showItems)}
+                    >Missing chapters</MenuItem>
+                    <MenuItem
+                        on:click={() => downloadUnviewedItems(showItems)}
+                    >All unviewed</MenuItem>
+                    <MenuItem on:click={() => downloadItems(showItems)}>All</MenuItem>
+                </MenuButton>
             {/if}
         </div>
     {/if}

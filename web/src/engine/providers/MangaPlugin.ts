@@ -177,7 +177,7 @@ export class Chapter extends StoreableMediaContainer<Page> {
         super(identifier, title, parent);
         this.downloadRegistry = parent.DownloadRegistry;
         this.tags.Value = tags;
-        this.downloadRegistry.IsStored(this).then(stored => this.SetStored(stored)).catch(console.warn);
+        this.RefreshStored().catch(console.warn);
     }
 
     protected PerformUpdate(): Promise<Page[]> {
@@ -192,7 +192,13 @@ export class Chapter extends StoreableMediaContainer<Page> {
         this.isStored.Value = value;
     }
 
-    public async Store(resources: Map<number, string>): Promise<void> {
+    public async RefreshStored(): Promise<boolean> {
+        const stored = await this.downloadRegistry.IsStored(this);
+        this.SetStored(stored);
+        return stored;
+    }
+
+    public async Store(resources: Map<number, string>, markStored = true): Promise<void> {
         // TODO: Inject settings manager and global scope identifier?
         const settings = HakuNeko.SettingsManager.OpenScope(Scope);
         const directory = settings.Get<Directory>(Key.MediaDirectory);
@@ -214,8 +220,10 @@ export class Chapter extends StoreableMediaContainer<Page> {
         const registry = CreateChapterExportRegistry(this.Parent?.Parent['storageController']);
         const format = settings.Get<Choice>(Key.MangaExportFormat).Value as MangaExportFormat;
         await registry[format].Export(resources, output, this.Title, this.Parent?.Title);
-        path.push(this.downloadRegistry.GetOutputName(this.Title, format));
-        await this.downloadRegistry.MarkStored(this, format, path.join('/'));
+        if(markStored) {
+            path.push(this.downloadRegistry.GetOutputName(this.Title, format));
+            await this.downloadRegistry.MarkStored(this, format, path.join('/'));
+        }
     }
 }
 

@@ -78,10 +78,10 @@ export class DownloadTask {
                 }
             });
             await Promise.allSettled(promises);
-            if(this.errors.Value.length === 0) {
-                this.UpdateProgress(-1 * this.Media.Entries.Value.length);
+            if(resourcemap.size > 0) {
+                this.UpdateProgress(-1 * resourcemap.size);
                 this.status.Value = Status.Processing;
-                await this.Media.Store(resourcemap);
+                await this.Media.Store(resourcemap, this.errors.Value.length === 0);
             }
         } catch(error) {
             this.errors.Push(error instanceof Error ? error : new Error(error.toString()));

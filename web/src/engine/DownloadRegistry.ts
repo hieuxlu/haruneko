@@ -76,8 +76,9 @@ export class DownloadRegistry {
             source,
             updated: Date.now(),
         };
-        (await this.GetRecords()).set(record.key, record);
+        const records = await this.GetRecords();
         await this.storage.SavePersistent(record, Store.Downloads, record.key);
+        records.set(record.key, record);
         chapter.SetStored(true);
     }
 
