@@ -95,6 +95,14 @@ creation, so the destination filesystem must support hard links (e.g. NTFS).
 
 ## Coverage and verification
 
+Chapter images retain their original filenames and relative subdirectories
+inside an ordered chapter directory, for example `c0001_ch299/4.png`.
+Pages are naturally sorted, not renumbered: source pages `1.png`, `2.png`,
+and `4.png` keep that gap. Chapter CBZ inputs retain their member paths too.
+This preserves evidence of missing pages but does not detect missing final
+pages or prove chapter completeness. Existing archives require rebuilding
+to use this naming layout.
+
 Missing required chapters, covers, and `knownIssues` prevent building that volume
 unless `--allow-partial` is given. Partial files end in `.incomplete.cbz` and
 record their problems in ComicInfo Notes. A volume with no chapter pages is

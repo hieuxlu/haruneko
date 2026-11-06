@@ -107,6 +107,11 @@ def volume_chapters(volume):
 class Page:
     source: Path
     member: str | None = None
+    relative_name: str | None = None
+
+    @property
+    def filename(self):
+        return self.member or self.relative_name or self.source.name
 
     @property
     def suffix(self):
@@ -123,7 +128,8 @@ class Page:
 
 def chapter_pages(path, extensions):
     if path.is_dir():
-        return [Page(p) for p in sorted(path.rglob('*'), key=lambda p: natural(p.relative_to(path)))
+        return [Page(p, relative_name=p.relative_to(path).as_posix())
+                for p in sorted(path.rglob('*'), key=lambda p: natural(p.relative_to(path)))
                 if p.is_file() and p.suffix.lower() in extensions]
     if path.is_file() and path.suffix.lower() in {'.cbz', '.zip'}:
         with zipfile.ZipFile(path) as archive:
@@ -187,8 +193,8 @@ def make_plan(config, args):
                     problems.append(f'Chapter {label(c)}: {len(images)} pages (minimum {series.get("minImagesPerChapter", 1)})')
                 continue
             included.append(label(c))
-            for i, page in enumerate(images, 1):
-                pages.append((f'c{len(included):04d}_ch{label(c)}_p{i:05d}{page.suffix}', page))
+            for page in images:
+                pages.append((f'c{len(included):04d}_ch{label(c)}/{page.filename}', page))
         cover = cover_path(series, volume, args.assets_root)
         has_cover = bool(cover and cover.is_file())
         if has_cover:

@@ -53,6 +53,7 @@ class PackagingTests(unittest.TestCase):
         target = self.archives()[0]
         self.assertEqual(cbz.verify(target), 6)
         with zipfile.ZipFile(target) as z:
+            self.assertEqual(z.namelist()[:2], ['c0001_ch1/2.jpg', 'c0001_ch1/10.jpg'])
             self.assertEqual(z.read(z.namelist()[0]), b'second page')
             self.assertIn('ch1.5', z.namelist()[2])
             info = ET.fromstring(z.read('ComicInfo.xml'))
@@ -97,7 +98,7 @@ class PackagingTests(unittest.TestCase):
         self.series['volumes'][0]['chapters'] = [2, 1.5, 1]
         self.assertEqual(self.run_cli('build'), 0)
         with zipfile.ZipFile(self.archives()[0]) as z:
-            self.assertIn('ch2_', z.namelist()[0])
+            self.assertIn('ch2/', z.namelist()[0])
 
     def test_duplicate_chapter_assignment_rejected(self):
         self.series['volumes'].append({'volume': 1, 'chapters': [2]})
@@ -114,6 +115,17 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(self.run_cli('build'), 0)
         with zipfile.ZipFile(self.archives()[0]) as z:
             self.assertEqual(z.read(z.namelist()[0]), b'page two')
+            self.assertEqual(z.namelist()[:2], ['c0001_ch1/2.png', 'c0001_ch1/10.png'])
+
+    def test_nested_original_names_preserved_without_collisions(self):
+        chapter = self.source / 'Test' / 'Ch. 1'
+        for folder in ('part1', 'part2'):
+            (chapter / folder).mkdir()
+            (chapter / folder / '004 extra.png').write_bytes(folder.encode())
+        self.assertEqual(self.run_cli('build'), 0)
+        with zipfile.ZipFile(self.archives()[0]) as z:
+            for folder in ('part1', 'part2'):
+                self.assertEqual(z.read(f'c0001_ch1/{folder}/004 extra.png'), folder.encode())
 
     def test_report_includes_unassigned_chapters(self):
         (self.source / 'Test' / 'Ch. 99').mkdir()
